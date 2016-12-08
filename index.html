@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta name='viewport' content='initial-scale=1.0, user-scalable=no'>
+		<meta charset='utf-8'>
+		<title>NetCon</title>
+		<style>
+			html,body,#map
+			{
+				height:100%;
+				margin:0;
+				padding:0;
+			}
+
+			.legend
+			{
+				position:absolute;
+				left:10px;
+				bottom:32px;
+				width:200px;
+			}
+
+			.legend-icon
+			{
+				width:24px;
+				height:24px;
+				margin-bottom:10px;
+			}
+			.legend-text
+			{
+				margin-left:28px;
+				vertical-align:middle;
+			}
+		</style>
+	</head>
+	<body>
+		<div id='map'></div>
+		<div class='legend'>
+			<div class='legend-icon' style='background-color:red;'><span class='legend-text'>Listening</span></div>
+			<div class='legend-icon' style='background-color:blue;'><span class='legend-text'>Established</span></div>
+			<div class='legend-icon' style='background-color:yellow;'><span class='legend-text'>Other</span></div>
+		</div>
+		<script src='netcon.js'></script>
+		<script>
+			function google_maps_callback()
+			{
+				if(!data)
+				{
+					setTimeout(get_data_callback,100);
+					return;
+				}
+
+				var center={lat:data.external.lat,lng:data.external.lng};
+				var map=create_map(document.getElementById('map'),center);
+
+				var non_closed_coords=[]
+				var listening_coords=[];
+				var established_coords=[];
+				var other_coords=[];
+				for(var key in data.connections)
+				{
+					var obj=null;
+
+					if(data.connections[key].status=='listening')
+						obj=listening_coords;
+					else if(data.connections[key].status=='established')
+						obj=established_coords;
+					else if(data.connections[key].status.substr(0,4)!='time'&&data.connections[key].status.substr(0,5)!='close')
+						obj=other_coords;
+
+					if(obj)
+					{
+						var contact=
+						{
+							status:data.connections[key].status,
+							laddr:data.connections[key].laddr,
+							lport:data.connections[key].lport,
+							raddr:data.connections[key].raddr,
+							rport:data.connections[key].rport,
+							lat:data.connections[key].lat,
+							lng:data.connections[key].lng
+						};
+						obj.push(center);
+						obj.push(contact);
+						non_closed_coords.push(contact);
+					}
+				}
+
+				draw_lines(map,listening_coords,'red');
+				draw_lines(map,established_coords,'blue');
+				draw_lines(map,other_coords,'yellow');
+
+				var lats={};
+				for(var key in non_closed_coords)
+				{
+					var lat=non_closed_coords[key].lat;
+					var lng=non_closed_coords[key].lng;
+					var label=non_closed_coords[key].status+' local :'+non_closed_coords[key].lport+' remote '+non_closed_coords[key].raddr+':'+non_closed_coords[key].rport;
+
+					if(!(lat in lats))
+						lats[lat]={};
+					if(!(lng in lats[lat]))
+						lats[lat][lng]='';
+					lats[lat][lng]+=label+'<br/>';
+				}
+
+				coords=[];
+				coords.push({lat:data.external.lat,lng:data.external.lng,label:'Center: '+data.external.addr});
+				for(var lat in lats)
+					for(var lng in lats[lat])
+						coords.push({lat:parseFloat(lat),lng:parseFloat(lng),label:lats[lat][lng]});
+				draw_markers(map,coords);
+			}
+
+			function create_map(el,center)
+			{
+				if(!el)
+					return null;
+				if(!center)
+					center={lat:0,lng:-180};
+				var map=new google.maps.Map
+				(
+					el,
+					{
+						zoom:3,
+						center:center,
+						mapTypeId:'terrain'
+					}
+				);
+				return map;
+			}
+
+			function draw_lines(map,coords,color='red')
+			{
+				var paths=new google.maps.Polyline
+				({
+					map:map,
+					path:JSON.parse(JSON.stringify(coords)),
+					//geodesic:true,
+					strokeColor:color
+				});
+				return paths;
+			}
+
+			function draw_markers(map,coords)
+			{
+				var markers=[];
+				for(var key in coords)
+					markers.push(add_marker(map,coords[key].lat,coords[key].lng,coords[key].label));
+				return markers;
+			}
+
+			function add_marker(map,lat,lng,label)
+			{
+				var marker=new google.maps.Marker
+				({
+					map:map,
+					position:{lat:lat,lng:lng}
+				});
+				var infowindow=new google.maps.InfoWindow
+				({
+					content:label
+				});
+				infowindow.open(map,marker);
+				marker.addListener('click',function(){infowindow.open(map,marker);});
+				return marker;
+			}
+		</script>
+		<script src='https://maps.googleapis.com/maps/api/js?callback=google_maps_callback'></script>
+	</body>
+</html>

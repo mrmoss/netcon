@@ -7,21 +7,35 @@ import psutil
 import socket
 import urllib2
 
+def geo_locate(ip):
+	try:
+		#Geolite2 database
+		geo=geolite2.lookup(ip)
+		if geo and geo.location and len(geo.location)==2 and type(geo.location[0])==float and type(geo.location[1])==float:
+			return (geo.location[0],geo.location[1])
+
+		#External service's database (fallback)
+		geo=json.loads(urllib2.urlopen('https://freegeoip.net/json/'+ip).read())
+		if geo and type(geo['latitude'])==float and type(geo['longitude'])==float:
+			return (geo['latitude'],geo['longitude'])
+
+		raise Exception('')
+
+	except:
+		raise Exception('Could not perform ip geolocation on ip: '+ip)
+
 if __name__=='__main__':
 	try:
+		#Get our external ip
 		external_ip=json.loads(urllib2.urlopen('https://api.ipify.org?format=json').read())['ip']
 
+		#Get our geocoords
 		data={'external':{'addr':external_ip,'lat':None,'lng':None},'connections':[]}
-		geo=geolite2.lookup(external_ip)
-		if geo and geo.location and len(geo.location)==2:
-			data['external']['lat']=geo.location[0]
-			data['external']['lng']=geo.location[1]
+		geo=geo_locate(external_ip)
+		data['external']['lat']=geo[0]
+		data['external']['lng']=geo[1]
 
-		if not data['external']['lat'] or not data['external']['lng']:
-			geo=json.loads(urllib2.urlopen('https://freegeoip.net/json/'+external_ip).read())
-			data['external']['lat']=geo['latitude']
-			data['external']['lng']=geo['longitude']
-
+		#Get local ip address for filtering connections to ourself
 		local_ip=socket.gethostbyname(socket.gethostname())
 
 		for con in psutil.net_connections():
@@ -47,12 +61,14 @@ if __name__=='__main__':
 			if (raddr==local_ip) or (not ipv6 and raddr=='0.0.0.0') or (not ipv6 and raddr=='127.0.0.1') or (ipv6 and raddr=='::') or (ipv6 and raddr=='::1'):
 				local=True
 
+			#Only add IPs that aren't local and that we can perform geo location on
 			if not local:
-				geo=geolite2.lookup(raddr)
-				if geo and geo.location and len(geo.location)==2:
-					lat=geo.location[0]
-					lng=geo.location[1]
-					data['connections'].append({'laddr':laddr,'lport':lport,'raddr':raddr,'rport':rport,'lat':lat,'lng':lng,'status':status})
+				try:
+					geo=geo_locate(raddr)
+					data['connections'].append({'laddr':laddr,'lport':lport,'raddr':raddr,'rport':rport,
+						'lat':geo[0],'lng':geo[1],'status':status})
+				except Exception as error:
+					print(error)
 
 		with open('netcon.js','w') as file:
 			file.write('data='+json.dumps(data)+';')

@@ -1,3 +1,5 @@
+![Screenshot](/screenshot.png)
+
 Simple script to show what a machine is connecting to and getting connections from with google 
 maps.
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #  pip install psutil python-geoip python-geoip-geolite2
 
 from geoip import geolite2

@@ -21,7 +21,7 @@ def geo_locate(ip):
 
 		raise Exception('')
 
-	except:
+	except Exception:
 		raise Exception('Could not perform ip geolocation on ip: '+ip)
 
 if __name__=='__main__':
